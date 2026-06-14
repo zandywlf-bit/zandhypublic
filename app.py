@@ -53,11 +53,13 @@ with tab1:
             key="po_uploader"
         )
         
-        if st.button("Upload & Process PO", type="primary", use_container_width=True):
+        # FIXED: Changed use_container_width=True to width='stretch'
+        if st.button("Upload & Process PO", type="primary", width='stretch'):
             if not po_file:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Distributor PO..."):
+                    # Patch Flask filename dependency dynamically
                     po_file.filename = po_file.name 
                     
                     result = handle_po_upload(
@@ -79,11 +81,13 @@ with tab1:
             key="prod_uploader"
         )
         
-        if st.button("Upload & Process Production", type="primary", use_container_width=True):
+        # FIXED: Changed use_container_width=True to width='stretch'
+        if st.button("Upload & Process Production", type="primary", width='stretch'):
             if not prod_file:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Production Data..."):
+                    # Patch Flask filename dependency dynamically
                     prod_file.filename = prod_file.name 
                     
                     result = handle_production_upload(
@@ -103,7 +107,8 @@ with tab2:
     st.subheader("📊 Item-Wise PO Completion Analysis")
     st.markdown(f"**Analyzing:** {selected_factory} | Year: {selected_year} | Season: {selected_season}")
     
-    if st.button("Generate Analytics & Comparison Report", use_container_width=True, type="primary"):
+    # FIXED: Changed use_container_width=True to width='stretch'
+    if st.button("Generate Analytics & Comparison Report", width='stretch', type="primary"):
         with st.spinner("Processing datasets and calculating item metrics..."):
             result = compare_po_vs_production(
                 selected_factory, 
@@ -115,14 +120,12 @@ with tab2:
                 report_data = result.get('data')
                 
                 if report_data:
-                    # 1. FIXED DATA LOAD ENGINE (Flattens nested/unhashable structures)
+                    # 1. DATA LOAD ENGINE (Flattens nested/unhashable structures)
                     if isinstance(report_data, dict):
-                        # Extract root keys if nested deeper or read as single row
                         df_raw = pd.DataFrame([report_data])
                     elif isinstance(report_data, list):
-                        # If list holds a single dict, extract it safely
-                        if len(report_data) == 1 and isinstance(report_data[0], dict):
-                            df_raw = pd.DataFrame(list(report_data[0].items()), columns=['Key', 'Value'])
+                        if len(report_data) == 1 and isinstance(report_data, dict):
+                            df_raw = pd.DataFrame(list(report_data.items()), columns=['Key', 'Value'])
                         else:
                             df_raw = pd.DataFrame(report_data)
                     elif isinstance(report_data, pd.DataFrame):
@@ -130,9 +133,8 @@ with tab2:
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # FIX: If backend grouped data using dict values, unpack them completely
-                    if df_raw.shape[1] == 2 and (df_raw.dtypes.iloc[1] == 'object' or isinstance(df_raw.iloc[0, 1], dict)):
-                        # Automatically normalize nested records JSON structure
+                    # If backend grouped data using dict values, unpack them completely
+                    if df_raw.shape[0] == 2 and (df_raw.dtypes.iloc[0] == 'object' or isinstance(df_raw.iloc[0], dict)):
                         normalized_list = []
                         for idx, row in df_raw.iterrows():
                             base_key = row.iloc[0]
@@ -143,7 +145,7 @@ with tab2:
                         if normalized_list:
                             df_raw = pd.DataFrame(normalized_list)
 
-                    # FIX: Flatten MultiIndex column Tuples if they exist
+                    # Flatten MultiIndex column Tuples if they exist
                     clean_columns = []
                     for col in df_raw.columns:
                         if isinstance(col, tuple):
@@ -174,9 +176,9 @@ with tab2:
                         if not item_col:
                             item_col = available_cols[0]
                         if not po_col and len(available_cols) > 1:
-                            po_col = available_cols[1] if available_cols[1] != item_col else available_cols[-1]
+                            po_col = available_cols if available_cols != item_col else available_cols[-1]
                         if not prod_col and len(available_cols) > 2:
-                            prod_col = available_cols[2] if available_cols[2] not in [item_col, po_col] else available_cols[-1]
+                            prod_col = available_cols if available_cols not in [item_col, po_col] else available_cols[-1]
 
                     # Terminal protection crash-guard checkpoint
                     if not po_col or not prod_col or not item_col:
