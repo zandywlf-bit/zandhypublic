@@ -7,24 +7,24 @@ from modules.upload_handler import handle_po_upload, handle_production_upload
 from modules.data_processor import compare_po_vs_production
 from modules.file_manager import list_available_factories, list_available_years
 
-# --- 1. CONFIGURATION & DIRECTORIES ---
+# --- 1. INITIAL APP CONFIGURATION ---
 st.set_page_config(
-    page_title="Factory Dashboard", 
+    page_title="Factory & PO Management Dashboard", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Ensure data directories exist safely
+# Ensure data directories exist safely on the server backend
 os.makedirs(Config.DATA_DIR, exist_ok=True)
 os.makedirs(os.path.join(Config.DATA_DIR, 'distributor_po'), exist_ok=True)
 os.makedirs(os.path.join(Config.DATA_DIR, 'factory_report'), exist_ok=True)
 os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
 
 
-# --- 2. SIDEBAR FILTERS ---
+# --- 2. SIDEBAR NAVIGATION FILTERS ---
 st.sidebar.title("🔍 Report Filters")
 
-# Fetch dropdown data from your modules
+# Fetch operational filtering options from your modules
 factories = list_available_factories()
 years = list_available_years()
 
@@ -33,14 +33,15 @@ selected_year = st.sidebar.selectbox("Select Year", options=years)
 selected_season = st.sidebar.selectbox("Select Season", options=Config.SEASONS)
 
 
-# --- 3. MAIN DASHBOARD UI ---
+# --- 3. MAIN DASHBOARD INTERFACE UI ---
 st.title("🏭 Factory & PO Management Dashboard")
-st.markdown("Upload documents or view production comparison metrics below.")
+st.markdown("Upload structural data sets or generate immediate fulfillment comparison metrics below.")
 
-# Split interface cleanly using top tabs
+# Split interface control flow using visual top layout tabs
 tab1, tab2 = st.tabs(["📤 Upload Data Control", "📊 View Comparison Report"])
 
-# --- TAB 1: UPLOADS ---
+
+# --- TAB 1: FILE UPLOADS CONTROL ---
 with tab1:
     col1, col2 = st.columns(2)
     
@@ -57,7 +58,7 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Distributor PO..."):
-                    # FIX: Add the missing Flask attribute dynamically so your module doesn't break
+                    # FIX: Patch Flask filename dependency dynamically
                     po_file.filename = po_file.name 
                     
                     result = handle_po_upload(
@@ -84,7 +85,7 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Production Data..."):
-                    # FIX: Add the missing Flask attribute dynamically so your module doesn't break
+                    # FIX: Patch Flask filename dependency dynamically
                     prod_file.filename = prod_file.name 
                     
                     result = handle_production_upload(
@@ -98,7 +99,8 @@ with tab1:
                     else:
                         st.error(result.get('message', 'Failed to process Production data.'))
 
-# --- TAB 2: COMPARISON REPORT ---
+
+# --- TAB 2: ANALYTICS & COMPARISON REPORT ---
 with tab2:
     st.subheader("📊 Item-Wise PO Completion Analysis")
     st.markdown(f"**Analyzing:** {selected_factory} | Year: {selected_year} | Season: {selected_season}")
@@ -115,7 +117,7 @@ with tab2:
                 report_data = result.get('data')
                 
                 if report_data:
-                    # 1. FIXED DATA LOAD ENGINE (Prevents dictionary ordering errors)
+                    # 1. DATA LOAD ENGINE (Prevents dictionary and ordering errors)
                     if isinstance(report_data, dict):
                         df_raw = pd.DataFrame([report_data])
                     elif isinstance(report_data, list):
@@ -123,59 +125,63 @@ with tab2:
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # Convert column names to lowercase for uniform processing
-                    df_raw.columns = [col.lower() for col in df_raw.columns]
+                    # FIX: Explicitly convert all headers to standard strings to avoid TypeErrors
+                    df_raw.columns = [str(col).strip().lower() for col in df_raw.columns]
                     
-                    # 2. FIXED COLUMN DETECTION ENGINE (Prevents NameError)
+                    # 2. COLUMN DETECTION ENGINE (Prevents NameError/Mismatch tracking bugs)
                     item_col = None
                     po_col = None
                     prod_col = None
 
-                    # Automatically map columns based on keyword matches
+                    # Automatically map columns based on safe string keyword lookups
                     for col in df_raw.columns:
-                        if 'item' in col or 'product' in col or 'description' in col or 'code' in col:
+                        if any(keyword in col for keyword in ['item', 'product', 'desc', 'code', 'name', 'article']):
                             item_col = col
-                        elif 'po' in col or 'request' in col or 'ordered' in col or 'qty' in col and 'prod' not in col:
-                            po_col = col
-                        elif 'prod' in col or 'complete' in col or 'actual' in col or 'manufacture' in col:
+                        elif any(keyword in col for keyword in ['po', 'request', 'order', 'qty', 'target', 'demand']):
+                            # Safeguard against cross-contamination with production header columns
+                            if 'prod' not in col and 'actual' not in col and 'complete' not in col:
+                                po_col = col
+                        elif any(keyword in col for keyword in ['prod', 'complete', 'actual', 'manufacture', 'made', 'done']):
                             prod_col = col
 
-                    # Positional fallback logic if keywords fail to find a match
-                    if not item_col and len(df_raw.columns) > 0:
-                        item_col = df_raw.columns[0]
-                    if not po_col and len(df_raw.columns) > 1:
-                        po_col = df_raw.columns[1]
-                    if not prod_col and len(df_raw.columns) > 2:
-                        prod_col = df_raw.columns[2]
+                    # Resilient positional fallback logic if header matching yields zero results
+                    available_cols = list(df_raw.columns)
+                    if len(available_cols) > 0:
+                        if not item_col:
+                            item_col = available_cols[0]
+                        if not po_col and len(available_cols) > 1:
+                            po_col = available_cols[1] if available_cols[1] != item_col else available_cols[-1]
+                        if not prod_col and len(available_cols) > 2:
+                            prod_col = available_cols[2]
 
-                    # Safety verification block
+                    # Terminal protection crash-guard checkpoint
                     if not po_col or not prod_col or not item_col:
-                        st.error("Could not determine layout columns. Ensure your data has distinct Item, PO, and Production columns.")
+                        st.error(f"Could not determine functional data tracking layout columns. Available headers found: {available_cols}")
                         st.stop()
 
                     # 3. COMPUTATIONAL ANALYTICS
-                    # Clean strings and format columns as numbers
+                    # Clean and enforce values as valid floating-point numbers
                     df_raw[po_col] = pd.to_numeric(df_raw[po_col]).fillna(0)
                     df_raw[prod_col] = pd.to_numeric(df_raw[prod_col]).fillna(0)
                     
-                    # Consolidate repeating items by adding their values together
+                    # Consolidate repeating lines by adding their metric metrics together
                     df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
                     
-                    # Calculate tracking metrics
+                    # Calculate tracking balance and variance rows
                     df_analysis['Shortage / Balance'] = df_analysis[prod_col] - df_analysis[po_col]
                     
-                    # Safe percentage calculation logic
+                    # Safe completion percentage engine framework (handles division by zero errors)
                     df_analysis['Completion %'] = (df_analysis[prod_col] / df_analysis[po_col] * 100).round(1)
                     df_analysis['Completion %'] = df_analysis['Completion %'].fillna(0).replace([float('inf'), float('-inf')], 100.0)
 
-                    # Rename the columns for clear user reading
+                    # Standardize visual headers cleanly for presentation layer layout
                     df_analysis = df_analysis.rename(columns={
                         item_col: 'Item ID / Description',
                         po_col: 'Total PO Requested',
                         prod_col: 'Total Production Completed'
                     })
 
-                    # 4. EXCEL EXPORT ENGINE (In-Memory Stream Buffer)
+                    # 4. EXCEL EXPORT ENGINE (In-Memory Binary Stream Buffer)
                     buffer = io.BytesIO()
                     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                         df_analysis.to_excel(writer, index=False, sheet_name='Item_Fulfillment_Summary')
@@ -189,7 +195,7 @@ with tab2:
                     )
                     st.divider()
 
-                    # 5. VISUAL METRIC GRAPHICS
+                    # 5. VISUAL METRIC GRAPHICS PANEL
                     st.markdown("#### 📈 Completion Percentage Matrix by Item")
                     st.bar_chart(
                         data=df_analysis, 
@@ -200,30 +206,49 @@ with tab2:
                     
                     st.divider()
 
-                    # 6. ENHANCED DATAFRAME RESULTS TABLE
+					 # 6. ENHANCED DATAFRAME PROGRESS VISUALIZATION TABLE
                     st.markdown("#### 📋 Detailed Fulfillment Metrics Table")
                     
+                    # Configuration schema to map column presentation rules dynamically
                     ui_config = {
-                        "Total PO Requested": st.column_config.NumberColumn("PO Request (Units)", format="%d"),
-                        "Total Production Completed": st.column_config.NumberColumn("Produced (Units)", format="%d"),
-                        "Shortage / Balance": st.column_config.NumberColumn("Variance", format="%+d"),
+                        "Item ID / Description": st.column_config.TextColumn(
+                            label="🆔 Item Details",
+                            help="Product unique identification name or barcode string",
+                            width="large",
+                            required=True
+                        ),
+                        "Total PO Requested": st.column_config.NumberColumn(
+                            label="📦 PO Request (Units)",
+                            help="Total inventory volume requested by the distributor",
+                            format="%d",
+                            width="medium"
+                        ),
+                        "Total Production Completed": st.column_config.NumberColumn(
+                            label="🏭 Produced (Units)",
+                            help="Total actual manufacturing volume produced by the factory",
+                            format="%d",
+                            width="medium"
+                        ),
+                        "Shortage / Balance": st.column_config.NumberColumn(
+                            label="⚖️ Variance",
+                            help="Production discrepancy balance: positive indicates surplus, negative indicates shortage",
+                            format="%+d",
+                            width="medium"
+                        ),
                         "Completion %": st.column_config.ProgressColumn(
-                            "Fulfillment Progress",
-                            help="Percentage of production completed vs distributor request",
+                            label="🏁 Fulfillment Progress",
+                            help="Visual breakdown percentage of production completed vs distributor request",
                             format="%.1f%%",
                             min_value=0,
-                            max_value=100
+                            max_value=100,
+                            width="large"
                         )
                     }
                     
+                    # Render the interactive clean dashboard dataset matrix table
                     st.dataframe(
-                        df_analysis,
+                        data=df_analysis,
                         column_config=ui_config,
-                        hide_index=True,
-                        use_container_width=True
+                        hide_index=True,           # Removes the raw 0,1,2 left side row index numbering
+                        use_container_width=True   # Forces the table to expand seamlessly to full grid width
                     )
-                    
-                else:
-                    st.info("Report execution completed but returned an empty dataset layout.")
-            else:
-                st.error(result.get('message', 'No active matching parameters found.'))
