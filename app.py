@@ -53,7 +53,6 @@ with tab1:
             key="po_uploader"
         )
         
-        # FIXED: Changed use_container_width=True to width='stretch'
         if st.button("Upload & Process PO", type="primary", width='stretch'):
             if not po_file:
                 st.warning("Please choose a file to upload first.")
@@ -81,7 +80,6 @@ with tab1:
             key="prod_uploader"
         )
         
-        # FIXED: Changed use_container_width=True to width='stretch'
         if st.button("Upload & Process Production", type="primary", width='stretch'):
             if not prod_file:
                 st.warning("Please choose a file to upload first.")
@@ -107,7 +105,6 @@ with tab2:
     st.subheader("📊 Item-Wise PO Completion Analysis")
     st.markdown(f"**Analyzing:** {selected_factory} | Year: {selected_year} | Season: {selected_season}")
     
-    # FIXED: Changed use_container_width=True to width='stretch'
     if st.button("Generate Analytics & Comparison Report", width='stretch', type="primary"):
         with st.spinner("Processing datasets and calculating item metrics..."):
             result = compare_po_vs_production(
@@ -133,18 +130,6 @@ with tab2:
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # If backend grouped data using dict values, unpack them completely
-                    if df_raw.shape[0] == 2 and (df_raw.dtypes.iloc[0] == 'object' or isinstance(df_raw.iloc[0], dict)):
-                        normalized_list = []
-                        for idx, row in df_raw.iterrows():
-                            base_key = row.iloc[0]
-                            dict_val = row.iloc[1]
-                            if isinstance(dict_val, dict):
-                                dict_val['item_id_key'] = base_key
-                                normalized_list.append(dict_val)
-                        if normalized_list:
-                            df_raw = pd.DataFrame(normalized_list)
-
                     # Flatten MultiIndex column Tuples if they exist
                     clean_columns = []
                     for col in df_raw.columns:
@@ -155,45 +140,51 @@ with tab2:
                         clean_columns.append(col_str.lower())
                     df_raw.columns = clean_columns
                     
-                    # 2. COLUMN DETECTION ENGINE
+                    # 2. COLUMN DETECTION ENGINE (Guaranteed String Output)
                     item_col = None
                     po_col = None
                     prod_col = None
 
-                    # Automatically map columns based on safe string keyword lookups
+                    # Step A: Attempt clean keyword tracing
                     for col in df_raw.columns:
-                        if any(keyword in col for keyword in ['item', 'product', 'desc', 'code', 'name', 'article', 'key']):
-                            item_col = col
-                        elif any(keyword in col for keyword in ['po', 'request', 'order', 'qty', 'target', 'demand']):
-                            if 'prod' not in col and 'actual' not in col and 'complete' not in col:
-                                po_col = col
-                        elif any(keyword in col for keyword in ['prod', 'complete', 'actual', 'manufacture', 'made', 'done']):
-                            prod_col = col
+                        col_str = str(col)
+                        if any(keyword in col_str for keyword in ['item', 'product', 'desc', 'code', 'name', 'article', 'key']):
+                            item_col = col_str
+                        elif any(keyword in col_str for keyword in ['po', 'request', 'order', 'qty', 'target', 'demand']):
+                            if 'prod' not in col_str and 'actual' not in col_str and 'complete' not in col_str:
+                                po_col = col_str
+                        elif any(keyword in col_str for keyword in ['prod', 'complete', 'actual', 'manufacture', 'made', 'done']):
+                            prod_col = col_str
 
-                    # Resilient positional fallback logic if header matching yields zero results
-                    available_cols = list(df_raw.columns)
+                    # Step B: Strict single-string positional fallbacks to eliminate data types error
+                    available_cols = [str(c) for c in df_raw.columns]
                     if len(available_cols) > 0:
                         if not item_col:
                             item_col = available_cols[0]
-                        if not po_col and len(available_cols) > 1:
-                            po_col = available_cols if available_cols != item_col else available_cols[-1]
-                        if not prod_col and len(available_cols) > 2:
-                            prod_col = available_cols if available_cols not in [item_col, po_col] else available_cols[-1]
+                        if not po_col:
+                            po_col = available_cols[1] if len(available_cols) > 1 else available_cols[0]
+                        if not prod_col:
+                            if len(available_cols) > 2:
+                                prod_col = available_cols[2]
+                            elif len(available_cols) > 1:
+                                prod_col = available_cols[1]
+                            else:
+                                prod_col = available_cols[0]
 
-                    # Terminal protection crash-guard checkpoint
+                    # Terminal protection checkpoint
                     if not po_col or not prod_col or not item_col:
-                        st.error(f"Could not determine functional data tracking layout columns. Available headers found: {available_cols}")
+                        st.error(f"Could not determine layout tracking columns. Available headers: {available_cols}")
                         st.stop()
 
-                    # Convert unhashable items (dicts/lists) explicitly to standard text strings
+                    # Convert unhashable items explicitly to standard text strings
                     df_raw[item_col] = df_raw[item_col].astype(str)
 
                     # 3. COMPUTATIONAL ANALYTICS
-                    # Clean and enforce values as valid floating-point numbers
+                    # Clean values and parse strings to numbers safely
                     df_raw[po_col] = pd.to_numeric(df_raw[po_col], errors='coerce').fillna(0)
                     df_raw[prod_col] = pd.to_numeric(df_raw[prod_col], errors='coerce').fillna(0)
                     
-                    # Consolidate repeating lines safely now that columns are clean strings
+                    # Consolidate repeating lines safely
                     df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
                     
                     # Calculate tracking balance and variance rows
