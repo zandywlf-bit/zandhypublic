@@ -7,6 +7,9 @@ from modules.upload_handler import handle_po_upload, handle_production_upload
 from modules.data_processor import compare_po_vs_production
 from modules.file_manager import list_available_factories, list_available_years
 
+# --- SILENCE DEPRECATION WARNING LOGS ---
+st.set_option('client.showErrorDetails', False)
+
 # --- 1. INITIAL APP CONFIGURATION ---
 st.set_page_config(
     page_title="Factory & PO Management Dashboard", 
