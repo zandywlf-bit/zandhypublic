@@ -7,9 +7,6 @@ from modules.upload_handler import handle_po_upload, handle_production_upload
 from modules.data_processor import compare_po_vs_production
 from modules.file_manager import list_available_factories, list_available_years
 
-# --- SILENCE DEPRECATION WARNING LOGS ---
-st.set_option('client.showErrorDetails', False)
-
 # --- 1. INITIAL APP CONFIGURATION ---
 st.set_page_config(
     page_title="Factory & PO Management Dashboard", 
@@ -44,63 +41,59 @@ st.markdown("Upload structural data sets or generate immediate fulfillment compa
 tab1, tab2 = st.tabs(["📤 Upload Data Control", "📊 View Comparison Report"])
 
 
-# --- TAB 1: FILE UPLOADS CONTROL ---
+# --- TAB 1: SEQUENTIAL FILE UPLOADS CONTROL (No Columns) ---
 with tab1:
-    col1, col2 = st.columns(2)
+    st.subheader("Distributor PO Upload")
+    po_file = st.file_uploader(
+        "Choose PO File", 
+        type=["xlsx", "csv"], 
+        key="po_uploader"
+    )
     
-    with col1:
-        st.subheader("Distributor PO Upload")
-        po_file = st.file_uploader(
-            "Choose PO File", 
-            type=["xlsx", "csv"], 
-            key="po_uploader"
-        )
-        
-        if st.button("Upload & Process PO", type="primary", width='stretch'):
-            if not po_file:
-                st.warning("Please choose a file to upload first.")
-            else:
-                with st.spinner("Processing Distributor PO..."):
-                    # Patch Flask filename dependency dynamically
-                    po_file.filename = po_file.name 
-                    
-                    result = handle_po_upload(
-                        selected_factory, 
-                        int(selected_year), 
-                        selected_season, 
-                        po_file
-                    )
-                    if result.get('status') == 'success':
-                        st.success(result.get('message', 'PO Upload successful!'))
-                    else:
-                        st.error(result.get('message', 'Failed to process PO.'))
+    if st.button("Upload & Process PO", type="primary", width='stretch'):
+        if not po_file:
+            st.warning("Please choose a file to upload first.")
+        else:
+            with st.spinner("Processing Distributor PO..."):
+                po_file.filename = po_file.name 
+                
+                result = handle_po_upload(
+                    selected_factory, 
+                    int(selected_year), 
+                    selected_season, 
+                    po_file
+                )
+                if result.get('status') == 'success':
+                    st.success(result.get('message', 'PO Upload successful!'))
+                else:
+                    st.error(result.get('message', 'Failed to process PO.'))
 
-    with col2:
-        st.subheader("Factory Production Upload")
-        prod_file = st.file_uploader(
-            "Choose Production File", 
-            type=["xlsx", "csv"], 
-            key="prod_uploader"
-        )
-        
-        if st.button("Upload & Process Production", type="primary", width='stretch'):
-            if not prod_file:
-                st.warning("Please choose a file to upload first.")
-            else:
-                with st.spinner("Processing Production Data..."):
-                    # Patch Flask filename dependency dynamically
-                    prod_file.filename = prod_file.name 
-                    
-                    result = handle_production_upload(
-                        selected_factory, 
-                        int(selected_year), 
-                        selected_season, 
-                        prod_file
-                    )
-                    if result.get('status') == 'success':
-                        st.success(result.get('message', 'Production report upload successful!'))
-                    else:
-                        st.error(result.get('message', 'Failed to process Production data.'))
+    st.markdown("---")
+
+    st.subheader("Factory Production Upload")
+    prod_file = st.file_uploader(
+        "Choose Production File", 
+        type=["xlsx", "csv"], 
+        key="prod_uploader"
+    )
+    
+    if st.button("Upload & Process Production", type="primary", width='stretch'):
+        if not prod_file:
+            st.warning("Please choose a file to upload first.")
+        else:
+            with st.spinner("Processing Production Data..."):
+                prod_file.filename = prod_file.name 
+                
+                result = handle_production_upload(
+                    selected_factory, 
+                    int(selected_year), 
+                    selected_season, 
+                    prod_file
+                )
+                if result.get('status') == 'success':
+                    st.success(result.get('message', 'Production report upload successful!'))
+                else:
+                    st.error(result.get('message', 'Failed to process Production data.'))
 
 
 # --- TAB 2: ANALYTICS & COMPARISON REPORT ---
@@ -214,7 +207,7 @@ with tab2:
                         data=buffer.getvalue(),
                         file_name=f"Fulfillment_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
+                        width='stretch'
                     )
                     st.divider()
 
