@@ -1,0 +1,191 @@
+/* Dashboard Custom Styles */
+
+body {
+    background-color: #f8f9fa;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+.dashboard-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-header h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+.dashboard-header p {
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-size: 0.95rem;
+}
+
+/* Navigation Tabs */
+.nav-tabs .nav-link {
+    font-weight: 500;
+    padding: 12px 24px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #6c757d;
+    transition: all 0.2s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #495057;
+    background-color: rgba(102, 126, 234, 0.05);
+}
+
+.nav-tabs .nav-link.active {
+    color: #667eea;
+    border-bottom: 3px solid #667eea;
+    background-color: transparent;
+}
+
+/* Upload Cards */
+.upload-card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.upload-card .card-header {
+    border-bottom: none;
+    padding: 16px 20px;
+}
+
+/* Tables */
+.table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+}
+
+.table td {
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* Progress Bars */
+.progress {
+    background-color: #e9ecef;
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: width 0.6s ease;
+}
+
+/* Badges */
+.badge {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+/* Summary Cards */
+.card.border-primary,
+.card.border-success,
+.card.border-warning,
+.card.border-danger {
+    border-width: 2px;
+    border-radius: 12px;
+    transition: transform 0.2s ease;
+}
+
+.card.border-primary:hover,
+.card.border-success:hover,
+.card.border-warning:hover,
+.card.border-danger:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.card.border-primary .card-title {
+    color: #667eea;
+}
+
+.card.border-success .card-title {
+    color: #28a745;
+}
+
+.card.border-warning .card-title {
+    color: #ffc107;
+}
+
+.card.border-danger .card-title {
+    color: #dc3545;
+}
+
+/* Alert styling */
+.alert-danger {
+    border-left: 4px solid #dc3545;
+    border-radius: 8px;
+}
+
+.alert-success {
+    border-left: 4px solid #28a745;
+    border-radius: 8px;
+}
+
+/* Loading spinner */
+.spinner-border {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+/* Chart container */
+#completionChart {
+    max-height: 400px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .dashboard-header h1 {
+        font-size: 1.3rem;
+    }
+
+    .nav-tabs .nav-link {
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+
+    .table {
+        font-size: 0.8rem;
+    }
+}
+
+/* Filter dropdowns */
+.form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* Buttons */
+.btn-primary {
+    background-color: #667eea;
+    border-color: #667eea;
+}
+
+.btn-primary:hover {
+    background-color: #5a6fd6;
+    border-color: #5a6fd6;
+}
+
+.btn-info {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+/* Footer */
+footer {
+    background-color: white;
+}
