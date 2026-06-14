@@ -115,72 +115,82 @@ with tab2:
                 report_data = result.get('data')
                 
                 if report_data:
-                    # 1. READ RAW DATA DATASET
-                   if report_data:
-                    # --- FIXED DATA LOAD ENGINE ---
-                    # Safely convert incoming payload to a DataFrame regardless of structure
+                    # 1. FIXED DATA LOAD ENGINE (Prevents dictionary ordering errors)
                     if isinstance(report_data, dict):
-                        # Wrap a single dictionary in a list so Pandas parses keys as columns
                         df_raw = pd.DataFrame([report_data])
                     elif isinstance(report_data, list):
                         df_raw = pd.DataFrame(report_data)
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # Ensure case-insensitive column matching for standard naming rules
+                    # Convert column names to lowercase for uniform processing
                     df_raw.columns = [col.lower() for col in df_raw.columns]
                     
-                    # Auto-detection safeguard if column naming varies
-                    if not po_col or not prod_col:
-                        # Fallback to search columns containing keywords
-                        for col in df_raw.columns:
-                            if 'po' in col: po_col = col
-                            if 'prod' in col or 'production' in col: prod_col = col
+                    # 2. FIXED COLUMN DETECTION ENGINE (Prevents NameError)
+                    item_col = None
+                    po_col = None
+                    prod_col = None
 
-                    if not po_col or not prod_col:
-                        st.error("Could not find matching 'PO' or 'Production' quantity columns in the module data. Please check data schema headers.")
+                    # Automatically map columns based on keyword matches
+                    for col in df_raw.columns:
+                        if 'item' in col or 'product' in col or 'description' in col or 'code' in col:
+                            item_col = col
+                        elif 'po' in col or 'request' in col or 'ordered' in col or 'qty' in col and 'prod' not in col:
+                            po_col = col
+                        elif 'prod' in col or 'complete' in col or 'actual' in col or 'manufacture' in col:
+                            prod_col = col
+
+                    # Positional fallback logic if keywords fail to find a match
+                    if not item_col and len(df_raw.columns) > 0:
+                        item_col = df_raw.columns[0]
+                    if not po_col and len(df_raw.columns) > 1:
+                        po_col = df_raw.columns[1]
+                    if not prod_col and len(df_raw.columns) > 2:
+                        prod_col = df_raw.columns[2]
+
+                    # Safety verification block
+                    if not po_col or not prod_col or not item_col:
+                        st.error("Could not determine layout columns. Ensure your data has distinct Item, PO, and Production columns.")
                         st.stop()
 
-                    # 2. RUN COMPUTATIONAL ANALYTICS
-                    # Fill blank numbers with zero to prevent breaking calculations
+                    # 3. COMPUTATIONAL ANALYTICS
+                    # Clean strings and format columns as numbers
                     df_raw[po_col] = pd.to_numeric(df_raw[po_col]).fillna(0)
                     df_raw[prod_col] = pd.to_numeric(df_raw[prod_col]).fillna(0)
                     
-                    # Group by item structure to combine duplicate rows safely
+                    # Consolidate repeating items by adding their values together
                     df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
                     
-                    # Calculate metric variance columns
+                    # Calculate tracking metrics
                     df_analysis['Shortage / Balance'] = df_analysis[prod_col] - df_analysis[po_col]
                     
-                    # Calculate Completion Percentage safely (handle division by zero)
+                    # Safe percentage calculation logic
                     df_analysis['Completion %'] = (df_analysis[prod_col] / df_analysis[po_col] * 100).round(1)
                     df_analysis['Completion %'] = df_analysis['Completion %'].fillna(0).replace([float('inf'), float('-inf')], 100.0)
 
-                    # Rename main columns cleanly for visualization rendering
+                    # Rename the columns for clear user reading
                     df_analysis = df_analysis.rename(columns={
                         item_col: 'Item ID / Description',
                         po_col: 'Total PO Requested',
                         prod_col: 'Total Production Completed'
                     })
 
-                    # 3. EXCEL EXPORT ENGINE (In-Memory Buffer tracking)
+                    # 4. EXCEL EXPORT ENGINE (In-Memory Stream Buffer)
                     buffer = io.BytesIO()
                     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                        df_analysis.to_excel(writer, index=False, sheet_name='Item_Completion_Summary')
+                        df_analysis.to_excel(writer, index=False, sheet_name='Item_Fulfillment_Summary')
                     
                     st.download_button(
                         label="📥 Download Completion Excel Report",
                         data=buffer.getvalue(),
-                        file_name=f"Completion_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
+                        file_name=f"Fulfillment_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
                     st.divider()
 
-                    # 4. DATA VISUALIZATION GRAPHICS
+                    # 5. VISUAL METRIC GRAPHICS
                     st.markdown("#### 📈 Completion Percentage Matrix by Item")
-                    
-                    # We pass the Completion percentage column to build an easily scanable bar layout
                     st.bar_chart(
                         data=df_analysis, 
                         x='Item ID / Description', 
@@ -190,10 +200,9 @@ with tab2:
                     
                     st.divider()
 
-                    # 5. STRUCTURED DATAFRAME LAYOUT
+                    # 6. ENHANCED DATAFRAME RESULTS TABLE
                     st.markdown("#### 📋 Detailed Fulfillment Metrics Table")
                     
-                    # Use configurations to inject clean progress bar visuals into the table
                     ui_config = {
                         "Total PO Requested": st.column_config.NumberColumn("PO Request (Units)", format="%d"),
                         "Total Production Completed": st.column_config.NumberColumn("Produced (Units)", format="%d"),
@@ -215,6 +224,6 @@ with tab2:
                     )
                     
                 else:
-                    st.info("Report run complete, but returned an empty dataset layout structure.")
+                    st.info("Report execution completed but returned an empty dataset layout.")
             else:
                 st.error(result.get('message', 'No active matching parameters found.'))
