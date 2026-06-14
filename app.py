@@ -145,7 +145,7 @@ with tab2:
                     po_col = None
                     prod_col = None
 
-                    # Step A: Attempt clean keyword tracing
+                    # Attempt clean keyword tracing
                     for col in df_raw.columns:
                         col_str = str(col)
                         if any(keyword in col_str for keyword in ['item', 'product', 'desc', 'code', 'name', 'article', 'key']):
@@ -156,7 +156,7 @@ with tab2:
                         elif any(keyword in col_str for keyword in ['prod', 'complete', 'actual', 'manufacture', 'made', 'done']):
                             prod_col = col_str
 
-                    # Step B: Strict single-string positional fallbacks to eliminate data types error
+                    # Strict single-string positional fallbacks to eliminate data types error
                     available_cols = [str(c) for c in df_raw.columns]
                     if len(available_cols) > 0:
                         if not item_col:
