@@ -115,26 +115,42 @@ with tab2:
                 report_data = result.get('data')
                 
                 if report_data:
-                    # 1. DATA LOAD ENGINE (Prevents dictionary and ordering errors)
+                    # 1. FIXED DATA LOAD ENGINE (Flattens nested/unhashable structures)
                     if isinstance(report_data, dict):
+                        # Extract root keys if nested deeper or read as single row
                         df_raw = pd.DataFrame([report_data])
                     elif isinstance(report_data, list):
-                        df_raw = pd.DataFrame(report_data)
+                        # If list holds a single dict, extract it safely
+                        if len(report_data) == 1 and isinstance(report_data[0], dict):
+                            df_raw = pd.DataFrame(list(report_data[0].items()), columns=['Key', 'Value'])
+                        else:
+                            df_raw = pd.DataFrame(report_data)
                     elif isinstance(report_data, pd.DataFrame):
                         df_raw = report_data.copy()
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # FIX: FLATTEN MULTIINDEX COLUMNS (Prevents TypeError: Invalid object type)
+                    # FIX: If backend grouped data using dict values, unpack them completely
+                    if df_raw.shape[1] == 2 and (df_raw.dtypes.iloc[1] == 'object' or isinstance(df_raw.iloc[0, 1], dict)):
+                        # Automatically normalize nested records JSON structure
+                        normalized_list = []
+                        for idx, row in df_raw.iterrows():
+                            base_key = row.iloc[0]
+                            dict_val = row.iloc[1]
+                            if isinstance(dict_val, dict):
+                                dict_val['item_id_key'] = base_key
+                                normalized_list.append(dict_val)
+                        if normalized_list:
+                            df_raw = pd.DataFrame(normalized_list)
+
+                    # FIX: Flatten MultiIndex column Tuples if they exist
                     clean_columns = []
                     for col in df_raw.columns:
                         if isinstance(col, tuple):
-                            # Join multi-level elements (e.g., ('PO', 'Qty') -> 'po_qty')
                             col_str = "_".join([str(c).strip() for c in col if str(c).strip() and "unnamed" not in str(c).lower()])
                         else:
                             col_str = str(col).strip()
                         clean_columns.append(col_str.lower())
-                    
                     df_raw.columns = clean_columns
                     
                     # 2. COLUMN DETECTION ENGINE
@@ -144,7 +160,7 @@ with tab2:
 
                     # Automatically map columns based on safe string keyword lookups
                     for col in df_raw.columns:
-                        if any(keyword in col for keyword in ['item', 'product', 'desc', 'code', 'name', 'article']):
+                        if any(keyword in col for keyword in ['item', 'product', 'desc', 'code', 'name', 'article', 'key']):
                             item_col = col
                         elif any(keyword in col for keyword in ['po', 'request', 'order', 'qty', 'target', 'demand']):
                             if 'prod' not in col and 'actual' not in col and 'complete' not in col:
@@ -167,18 +183,21 @@ with tab2:
                         st.error(f"Could not determine functional data tracking layout columns. Available headers found: {available_cols}")
                         st.stop()
 
+                    # Convert unhashable items (dicts/lists) explicitly to standard text strings
+                    df_raw[item_col] = df_raw[item_col].astype(str)
+
                     # 3. COMPUTATIONAL ANALYTICS
                     # Clean and enforce values as valid floating-point numbers
                     df_raw[po_col] = pd.to_numeric(df_raw[po_col], errors='coerce').fillna(0)
                     df_raw[prod_col] = pd.to_numeric(df_raw[prod_col], errors='coerce').fillna(0)
                     
-                    # Consolidate repeating lines by adding their metric metrics together
+                    # Consolidate repeating lines safely now that columns are clean strings
                     df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
                     
                     # Calculate tracking balance and variance rows
                     df_analysis['Shortage / Balance'] = df_analysis[prod_col] - df_analysis[po_col]
                     
-                    # Safe completion percentage engine framework (handles division by zero errors)
+                    # Safe completion percentage engine framework
                     df_analysis['Completion %'] = (df_analysis[prod_col] / df_analysis[po_col] * 100).round(1)
                     df_analysis['Completion %'] = df_analysis['Completion %'].fillna(0).replace([float('inf'), float('-inf')], 100.0)
 
