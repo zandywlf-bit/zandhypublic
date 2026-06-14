@@ -111,18 +111,59 @@ with tab2:
             
             if result.get('status') == 'success':
                 st.success("Analysis complete!")
-                
-                # Extract data payload from your data_processor module
                 report_data = result.get('data')
                 
                 if report_data:
-                    # Dynamically convert dictionary arrays into interactive tables
+                    # 1. CONVERT DATA TO DATAFRAME
+                    # Safely handle list of dicts or nested dictionaries
                     if isinstance(report_data, list):
-                        st.dataframe(pd.DataFrame(report_data), use_container_width=True)
+                        df = pd.DataFrame(report_data)
                     elif isinstance(report_data, dict):
-                        st.json(report_data)
+                        # If it is nested, adjust orientation or read directly
+                        df = pd.DataFrame([report_data] if 'status' not in report_data else report_data)
                     else:
-                        st.write(report_data)
+                        df = pd.DataFrame(report_data)
+
+                    # --- EXCEL DOWNLOAD RECORDING FEATURE ---
+                    # Create an in-memory buffer so it doesn't write clutter files to your cloud server
+                    buffer = io.BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        df.to_excel(writer, index=False, sheet_name='Comparison_Report')
+                    
+                    # Construct download action button
+                    st.download_button(
+                        label="📥 Download Report as Excel",
+                        data=buffer.getvalue(),
+                        file_name=f"Comparison_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+                    st.divider()
+
+                    # --- VISUAL DATA RESULTS ---
+                    col_table, col_chart = st.columns([3, 2]) # 60% table space, 40% chart space
+                    
+                    with col_table:
+                        st.markdown("#### 📋 Structured Results Table")
+                        st.dataframe(df, use_container_width=True)
+                        
+                    with col_chart:
+                        st.markdown("#### 📊 Metric Analytics Graphic")
+                        
+                        # Dynamically find valid numerical columns to graph automatically
+                        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+                        
+                        if len(numeric_cols) > 0:
+                            # If you have an explicit category column like 'item', 'month', or 'date'
+                            # We check for common naming strings to index the chart labels cleanly
+                            text_cols = df.select_dtypes(include=['object']).columns.tolist()
+                            chart_index = text_cols[0] if text_cols else None
+                            
+                            # Render interactive bar visual
+                            st.bar_chart(data=df, x=chart_index, y=numeric_cols, use_container_width=True)
+                        else:
+                            st.info("No numeric fields available in report payload to generate graphs.")
+                            
                 else:
                     st.info("Report completed but returned empty dataset metrics.")
             else:
