@@ -58,7 +58,6 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Distributor PO..."):
-                    # FIX: Patch Flask filename dependency dynamically
                     po_file.filename = po_file.name 
                     
                     result = handle_po_upload(
@@ -85,7 +84,6 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Production Data..."):
-                    # FIX: Patch Flask filename dependency dynamically
                     prod_file.filename = prod_file.name 
                     
                     result = handle_production_upload(
@@ -122,13 +120,24 @@ with tab2:
                         df_raw = pd.DataFrame([report_data])
                     elif isinstance(report_data, list):
                         df_raw = pd.DataFrame(report_data)
+                    elif isinstance(report_data, pd.DataFrame):
+                        df_raw = report_data.copy()
                     else:
                         df_raw = pd.DataFrame(report_data)
                     
-                    # FIX: Explicitly convert all headers to standard strings to avoid TypeErrors
-                    df_raw.columns = [str(col).strip().lower() for col in df_raw.columns]
+                    # FIX: FLATTEN MULTIINDEX COLUMNS (Prevents TypeError: Invalid object type)
+                    clean_columns = []
+                    for col in df_raw.columns:
+                        if isinstance(col, tuple):
+                            # Join multi-level elements (e.g., ('PO', 'Qty') -> 'po_qty')
+                            col_str = "_".join([str(c).strip() for c in col if str(c).strip() and "unnamed" not in str(c).lower()])
+                        else:
+                            col_str = str(col).strip()
+                        clean_columns.append(col_str.lower())
                     
-                    # 2. COLUMN DETECTION ENGINE (Prevents NameError/Mismatch tracking bugs)
+                    df_raw.columns = clean_columns
+                    
+                    # 2. COLUMN DETECTION ENGINE
                     item_col = None
                     po_col = None
                     prod_col = None
@@ -138,7 +147,6 @@ with tab2:
                         if any(keyword in col for keyword in ['item', 'product', 'desc', 'code', 'name', 'article']):
                             item_col = col
                         elif any(keyword in col for keyword in ['po', 'request', 'order', 'qty', 'target', 'demand']):
-                            # Safeguard against cross-contamination with production header columns
                             if 'prod' not in col and 'actual' not in col and 'complete' not in col:
                                 po_col = col
                         elif any(keyword in col for keyword in ['prod', 'complete', 'actual', 'manufacture', 'made', 'done']):
@@ -152,7 +160,7 @@ with tab2:
                         if not po_col and len(available_cols) > 1:
                             po_col = available_cols[1] if available_cols[1] != item_col else available_cols[-1]
                         if not prod_col and len(available_cols) > 2:
-                            prod_col = available_cols[2]
+                            prod_col = available_cols[2] if available_cols[2] not in [item_col, po_col] else available_cols[-1]
 
                     # Terminal protection crash-guard checkpoint
                     if not po_col or not prod_col or not item_col:
@@ -161,8 +169,8 @@ with tab2:
 
                     # 3. COMPUTATIONAL ANALYTICS
                     # Clean and enforce values as valid floating-point numbers
-                    df_raw[po_col] = pd.to_numeric(df_raw[po_col]).fillna(0)
-                    df_raw[prod_col] = pd.to_numeric(df_raw[prod_col]).fillna(0)
+                    df_raw[po_col] = pd.to_numeric(df_raw[po_col], errors='coerce').fillna(0)
+                    df_raw[prod_col] = pd.to_numeric(df_raw[prod_col], errors='coerce').fillna(0)
                     
                     # Consolidate repeating lines by adding their metric metrics together
                     df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
