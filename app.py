@@ -56,6 +56,9 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Distributor PO..."):
+                    # FIX: Add the missing Flask attribute dynamically so your module doesn't break
+                    po_file.filename = po_file.name 
+                    
                     result = handle_po_upload(
                         selected_factory, 
                         int(selected_year), 
@@ -80,6 +83,9 @@ with tab1:
                 st.warning("Please choose a file to upload first.")
             else:
                 with st.spinner("Processing Production Data..."):
+                    # FIX: Add the missing Flask attribute dynamically so your module doesn't break
+                    prod_file.filename = prod_file.name 
+                    
                     result = handle_production_upload(
                         selected_factory, 
                         int(selected_year), 
@@ -90,7 +96,6 @@ with tab1:
                         st.success(result.get('message', 'Production report upload successful!'))
                     else:
                         st.error(result.get('message', 'Failed to process Production data.'))
-
 
 # --- TAB 2: COMPARISON REPORT ---
 with tab2:
