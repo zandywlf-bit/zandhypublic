@@ -100,10 +100,11 @@ with tab1:
 
 # --- TAB 2: COMPARISON REPORT ---
 with tab2:
-    st.subheader("PO vs Production Discrepancy Matrix")
+    st.subheader("📊 Item-Wise PO Completion Analysis")
+    st.markdown(f"**Analyzing:** {selected_factory} | Year: {selected_year} | Season: {selected_season}")
     
-    if st.button("Generate Comparison Report", use_container_width=True):
-        with st.spinner("Analyzing datasets..."):
+    if st.button("Generate Analytics & Comparison Report", use_container_width=True, type="primary"):
+        with st.spinner("Processing datasets and calculating item metrics..."):
             result = compare_po_vs_production(
                 selected_factory, 
                 int(selected_year), 
@@ -111,61 +112,105 @@ with tab2:
             )
             
             if result.get('status') == 'success':
-                st.success("Analysis complete!")
                 report_data = result.get('data')
                 
                 if report_data:
-                    # 1. CONVERT DATA TO DATAFRAME
-                    # Safely handle list of dicts or nested dictionaries
-                    if isinstance(report_data, list):
-                        df = pd.DataFrame(report_data)
-                    elif isinstance(report_data, dict):
-                        # If it is nested, adjust orientation or read directly
-                        df = pd.DataFrame([report_data] if 'status' not in report_data else report_data)
-                    else:
-                        df = pd.DataFrame(report_data)
+                    # 1. READ RAW DATA DATASET
+                    df_raw = pd.DataFrame(report_data)
+                    
+                    # Ensure case-insensitive column matching for standard naming rules
+                    df_raw.columns = [col.lower() for col in df_raw.columns]
+                    
+                    # Fallback assignment mapping if column names differ slightly
+                    item_col = 'item' if 'item' in df_raw.columns else ('item_name' if 'item_name' in df_raw.columns else df_raw.columns[0])
+                    po_col = 'po_quantity' if 'po_quantity' in df_raw.columns else ('po_qty' if 'po_qty' in df_raw.columns else None)
+                    prod_col = 'production_quantity' if 'production_quantity' in df_raw.columns else ('prod_qty' if 'prod_qty' in df_raw.columns else None)
+                    
+                    # Auto-detection safeguard if column naming varies
+                    if not po_col or not prod_col:
+                        # Fallback to search columns containing keywords
+                        for col in df_raw.columns:
+                            if 'po' in col: po_col = col
+                            if 'prod' in col or 'production' in col: prod_col = col
 
-                    # --- EXCEL DOWNLOAD RECORDING FEATURE ---
-                    # Create an in-memory buffer so it doesn't write clutter files to your cloud server
+                    if not po_col or not prod_col:
+                        st.error("Could not find matching 'PO' or 'Production' quantity columns in the module data. Please check data schema headers.")
+                        st.stop()
+
+                    # 2. RUN COMPUTATIONAL ANALYTICS
+                    # Fill blank numbers with zero to prevent breaking calculations
+                    df_raw[po_col] = pd.to_numeric(df_raw[po_col]).fillna(0)
+                    df_raw[prod_col] = pd.to_numeric(df_raw[prod_col]).fillna(0)
+                    
+                    # Group by item structure to combine duplicate rows safely
+                    df_analysis = df_raw.groupby(item_col, as_index=False)[[po_col, prod_col]].sum()
+                    
+                    # Calculate metric variance columns
+                    df_analysis['Shortage / Balance'] = df_analysis[prod_col] - df_analysis[po_col]
+                    
+                    # Calculate Completion Percentage safely (handle division by zero)
+                    df_analysis['Completion %'] = (df_analysis[prod_col] / df_analysis[po_col] * 100).round(1)
+                    df_analysis['Completion %'] = df_analysis['Completion %'].fillna(0).replace([float('inf'), float('-inf')], 100.0)
+
+                    # Rename main columns cleanly for visualization rendering
+                    df_analysis = df_analysis.rename(columns={
+                        item_col: 'Item ID / Description',
+                        po_col: 'Total PO Requested',
+                        prod_col: 'Total Production Completed'
+                    })
+
+                    # 3. EXCEL EXPORT ENGINE (In-Memory Buffer tracking)
                     buffer = io.BytesIO()
                     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                        df.to_excel(writer, index=False, sheet_name='Comparison_Report')
+                        df_analysis.to_excel(writer, index=False, sheet_name='Item_Completion_Summary')
                     
-                    # Construct download action button
                     st.download_button(
-                        label="📥 Download Report as Excel",
+                        label="📥 Download Completion Excel Report",
                         data=buffer.getvalue(),
-                        file_name=f"Comparison_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
+                        file_name=f"Completion_Report_{selected_factory}_{selected_year}_{selected_season}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
                     st.divider()
 
-                    # --- VISUAL DATA RESULTS ---
-                    col_table, col_chart = st.columns([3, 2]) # 60% table space, 40% chart space
+                    # 4. DATA VISUALIZATION GRAPHICS
+                    st.markdown("#### 📈 Completion Percentage Matrix by Item")
                     
-                    with col_table:
-                        st.markdown("#### 📋 Structured Results Table")
-                        st.dataframe(df, use_container_width=True)
-                        
-                    with col_chart:
-                        st.markdown("#### 📊 Metric Analytics Graphic")
-                        
-                        # Dynamically find valid numerical columns to graph automatically
-                        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
-                        
-                        if len(numeric_cols) > 0:
-                            # If you have an explicit category column like 'item', 'month', or 'date'
-                            # We check for common naming strings to index the chart labels cleanly
-                            text_cols = df.select_dtypes(include=['object']).columns.tolist()
-                            chart_index = text_cols[0] if text_cols else None
-                            
-                            # Render interactive bar visual
-                            st.bar_chart(data=df, x=chart_index, y=numeric_cols, use_container_width=True)
-                        else:
-                            st.info("No numeric fields available in report payload to generate graphs.")
-                            
+                    # We pass the Completion percentage column to build an easily scanable bar layout
+                    st.bar_chart(
+                        data=df_analysis, 
+                        x='Item ID / Description', 
+                        y='Completion %', 
+                        use_container_width=True
+                    )
+                    
+                    st.divider()
+
+                    # 5. STRUCTURED DATAFRAME LAYOUT
+                    st.markdown("#### 📋 Detailed Fulfillment Metrics Table")
+                    
+                    # Use configurations to inject clean progress bar visuals into the table
+                    ui_config = {
+                        "Total PO Requested": st.column_config.NumberColumn("PO Request (Units)", format="%d"),
+                        "Total Production Completed": st.column_config.NumberColumn("Produced (Units)", format="%d"),
+                        "Shortage / Balance": st.column_config.NumberColumn("Variance", format="%+d"),
+                        "Completion %": st.column_config.ProgressColumn(
+                            "Fulfillment Progress",
+                            help="Percentage of production completed vs distributor request",
+                            format="%.1f%%",
+                            min_value=0,
+                            max_value=100
+                        )
+                    }
+                    
+                    st.dataframe(
+                        df_analysis,
+                        column_config=ui_config,
+                        hide_index=True,
+                        use_container_width=True
+                    )
+                    
                 else:
-                    st.info("Report completed but returned empty dataset metrics.")
+                    st.info("Report run complete, but returned an empty dataset layout structure.")
             else:
-                st.error(result.get('message', 'No active match parameters found.'))
+                st.error(result.get('message', 'No active matching parameters found.'))
