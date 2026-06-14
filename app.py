@@ -116,15 +116,19 @@ with tab2:
                 
                 if report_data:
                     # 1. READ RAW DATA DATASET
-                    df_raw = pd.DataFrame(report_data)
+                   if report_data:
+                    # --- FIXED DATA LOAD ENGINE ---
+                    # Safely convert incoming payload to a DataFrame regardless of structure
+                    if isinstance(report_data, dict):
+                        # Wrap a single dictionary in a list so Pandas parses keys as columns
+                        df_raw = pd.DataFrame([report_data])
+                    elif isinstance(report_data, list):
+                        df_raw = pd.DataFrame(report_data)
+                    else:
+                        df_raw = pd.DataFrame(report_data)
                     
                     # Ensure case-insensitive column matching for standard naming rules
                     df_raw.columns = [col.lower() for col in df_raw.columns]
-                    
-                    # Fallback assignment mapping if column names differ slightly
-                    item_col = 'item' if 'item' in df_raw.columns else ('item_name' if 'item_name' in df_raw.columns else df_raw.columns[0])
-                    po_col = 'po_quantity' if 'po_quantity' in df_raw.columns else ('po_qty' if 'po_qty' in df_raw.columns else None)
-                    prod_col = 'production_quantity' if 'production_quantity' in df_raw.columns else ('prod_qty' if 'prod_qty' in df_raw.columns else None)
                     
                     # Auto-detection safeguard if column naming varies
                     if not po_col or not prod_col:
